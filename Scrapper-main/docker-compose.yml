@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sdr
+      POSTGRES_PASSWORD: sdr
+      POSTGRES_DB: sdr
+    ports:
+      - "5433:5432"
+    volumes:
+      - sdr_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sdr -d sdr"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sdr:sdr@postgres:5432/sdr
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - sdr_job_artifacts:/tmp/sdr_jobs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sdr:sdr@postgres:5432/sdr
+      REDIS_URL: redis://redis:6379/0
+      VERIFIER_PROVIDER: own_api
+    volumes:
+      - sdr_job_artifacts:/tmp/sdr_jobs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+
+volumes:
+  sdr_pg_data:
+  sdr_job_artifacts:
