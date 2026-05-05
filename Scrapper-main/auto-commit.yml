@@ -1,0 +1,29 @@
+name: Auto Commit Every 12 Hours
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'   # runs at 00:00 and 12:00 UTC every day
+  workflow_dispatch:          # lets you trigger it manually too
+
+jobs:
+  auto-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update activity log
+        run: |
+          echo "Last auto-commit: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> activity.log
+          echo "Keeping the graph green." >> activity.log
+
+      - name: Commit and push
+        run: |
+          git config user.name "core-bleed"
+          git config user.email "asaadkhalil1@gmail.com"
+          git add activity.log
+          git commit -m "chore: auto-update activity log [$(date '+%Y-%m-%d %H:%M')]"
+          git push
